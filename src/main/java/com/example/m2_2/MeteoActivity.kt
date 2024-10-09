@@ -99,7 +99,7 @@ fun ErrorBody() {
 @Composable
 fun topAppBarWithReturn(navController: NavController){
     TopAppBar(
-        title = {Text(text = "Météo")},
+        title = {Text(text = "Détails météo")},
         navigationIcon = {
             IconButton(onClick = { navController.popBackStack() }) {
                 Icon(Icons.Filled.ArrowBack, "backIcon")

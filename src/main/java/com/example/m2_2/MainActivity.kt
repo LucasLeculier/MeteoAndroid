@@ -1,7 +1,10 @@
 package com.example.m2_2
 
+import android.app.Activity
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -152,30 +156,42 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun TopBarWithSearch(
-        searchtext: TextFieldValue,
+        searchText: TextFieldValue,
         modifier: Modifier = Modifier,
         onSearch: (String) -> Unit
-
     ) {
-        TopAppBar(
-            title = {
-                SearchBar(
-                    onSearch = onSearch,
-                    modifier = Modifier.fillMaxWidth(),
-                    searchText = searchtext
-                )
-            },
-            colors = TopAppBarDefaults.smallTopAppBarColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                titleContentColor = MaterialTheme.colorScheme.onPrimary
-            ),
-            modifier = modifier
-        )
-    }
+        Column(modifier = modifier.fillMaxWidth()) {
+            // Top App Bar
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Météo de Lucas",
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color.White // Titre en blanc
+                    )
+                },
+                colors = TopAppBarDefaults.smallTopAppBarColors(
+                    containerColor = Color.Black, // Couleur noire
+                    titleContentColor = Color.White // Couleur du titre en blanc
+                ),
+                modifier = modifier
+            )
 
+            // Search Bar
+            SearchBar(
+                onSearch = { onSearch(it) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                searchText = searchText
+            )
+        }
+    }
 
     @Composable
     fun ResultatsRecherche(searchResults : List<City>) {
+        val context = LocalContext.current
         LazyColumn {
             items(searchResults) { city ->
                 Row(
@@ -183,6 +199,10 @@ class MainActivity : ComponentActivity() {
                         .fillMaxWidth()
                         .clickable(
                             onClick = {
+                                // Masquer le clavier
+                                val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                imm.hideSoftInputFromWindow((context as Activity).currentFocus?.windowToken, 0)
+
                                 cityViewModel.addCityToFavorites(this@MainActivity, city)
                             }
                         )
