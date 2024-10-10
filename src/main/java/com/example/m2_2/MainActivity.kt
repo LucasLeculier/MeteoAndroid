@@ -144,10 +144,8 @@ class MainActivity : ComponentActivity() {
     fun HomeScreen(navController: NavController, cityState: CityState) {
         val context = LocalContext.current
         Column {
-
-
             TopBarWithSearch(cityState) { query ->
-                if (query.length >= 1) { // Lancer la recherche après 1 caractère
+                if (query.isNotEmpty()) { // Affiche les résultats de la recherche
                     cityViewModel.performSearch(query, context)
                 } else {
                     cityViewModel.clearList() // Réinitialiser la liste des résultats
@@ -158,15 +156,29 @@ class MainActivity : ComponentActivity() {
             if (cityState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.padding(16.dp))
             } else {
-                if (cityState.searchResults.isNotEmpty()) {
+                if (cityState.searchText.text.isEmpty()) {
+                    // Affiche la liste des favoris si la barre de recherche est vide
+                    ListingFavoris(cityState, navController, cityState.cities, cityViewModel)
+                } else if (cityState.searchResults.isNotEmpty()) {
+                    // Affiche les résultats de recherche si la barre de recherche n'est pas vide
                     ResultatsRecherche(cityState.searchResults)
                 } else {
-                    // Afficher la liste des favoris si pas de résultats
-                    ListingFavoris(cityState,navController, cityState.cities, cityViewModel)
+                    // Message quand il n'y a pas de résultats
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth() // Ajuste la largeur en fonction du contenu
+                                .padding(16.dp), // Ajouter un espacement autour de la Box
+                            contentAlignment = Alignment.Center // Centrer le contenu horizontalement
+                        ) {
+
+                            Text(text = "Aucun résultat")
+                        }
+
                 }
             }
         }
     }
+
 
     @Composable
     fun BanniereHorsConnexion() {
@@ -294,45 +306,47 @@ class MainActivity : ComponentActivity() {
     fun ResultatsRecherche(searchResults : List<City>) {
         val context = LocalContext.current
         LazyColumn {
-            items(searchResults) { city ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            onClick = {
-                                cityViewModel.addCityToFavorites(this@MainActivity, city)
-                                val imm =
-                                    context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                                imm.hideSoftInputFromWindow(
-                                    (context as Activity).currentFocus?.windowToken,
-                                    0
-                                )
-                            }
+                items(searchResults) { city ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                onClick = {
+                                    cityViewModel.addCityToFavorites(this@MainActivity, city)
+                                    val imm =
+                                        context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                    imm.hideSoftInputFromWindow(
+                                        (context as Activity).currentFocus?.windowToken,
+                                        0
+                                    )
+                                }
+                            )
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = city.name,
                         )
-                        .padding(8.dp)
-                ) {
-                    Text(
-                        text = city.name,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = city.admin1,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = city.country,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = "Add Icon"
-                    )
-                }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = city.admin1,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = city.country,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Add Icon"
+                        )
+                    }
 
-                HorizontalDivider()
+
+                    HorizontalDivider()
+                }
             }
         }
-    }
+
 
 
     @Composable
