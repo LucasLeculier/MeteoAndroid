@@ -48,6 +48,14 @@ class CityViewModel : ViewModel() {
 
     fun loadCache(context: Context) {
         viewModelScope.launch {
+            /*
+            // Supprimer les données de cache
+            MeteoCache.saveWeatherData(context, emptyList())
+            CityCache.saveFavorites(context, emptyList())
+
+             */
+        }
+        viewModelScope.launch {
 
             CityCache.loadFavorites(context).collect { favorites ->
                 // Émettre l'état avec les favoris chargés

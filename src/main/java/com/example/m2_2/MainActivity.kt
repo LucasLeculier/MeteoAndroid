@@ -131,7 +131,7 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(navArgument("cityId") { type = NavType.IntType }) // Changez le type à IntType
                     ) { backStackEntry ->
                         val cityId = backStackEntry.arguments?.getInt("cityId") ?: -1 // Utilisez getInt pour récupérer l'ID
-                        SecondScreen(navController = navController,cityState, cityId = cityId) // Passez cityId à SecondScreen
+                        SecondScreen(navController = navController,cityState, cityId = cityId,cityViewModel) // Passez cityId à SecondScreen
                     }
                 }
                 }
@@ -144,7 +144,9 @@ class MainActivity : ComponentActivity() {
     fun HomeScreen(navController: NavController, cityState: CityState) {
         val context = LocalContext.current
         Column {
-            TopBarWithSearch(cityState.searchText) { query ->
+
+
+            TopBarWithSearch(cityState) { query ->
                 if (query.length >= 1) { // Lancer la recherche après 1 caractère
                     cityViewModel.performSearch(query, context)
                 } else {
@@ -253,7 +255,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun TopBarWithSearch(
-        searchText: TextFieldValue,
+        cityState: CityState,
         modifier: Modifier = Modifier,
         onSearch: (String) -> Unit
     ) {
@@ -276,14 +278,16 @@ class MainActivity : ComponentActivity() {
             )
 
             // Search Bar
+            if (!cityState.horsConnexion) {
             SearchBar(
                 onSearch = { onSearch(it) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
-                searchText = searchText
+                searchText = cityState.searchText
             )
         }
+            }
     }
 
     @Composable
@@ -391,15 +395,11 @@ class MainActivity : ComponentActivity() {
 
         LaunchedEffect(city) {
             coroutineScope.launch {
-
-
                 if (cityState.horsConnexion || meteoAJour(city, cityState.meteos)) {
                     meteo = cityState.meteos.find { it.ville.id == cityId }
                 }else{
                     meteo = meteoDataSource.fetchMeteo(city)
                 }
-
-
             }
         }
 
@@ -463,7 +463,7 @@ class MainActivity : ComponentActivity() {
         val context = LocalContext.current
 
 
-        if (cityList.isEmpty()) {
+        if (cityList.size<=1) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth() // Ajuste la largeur en fonction du contenu

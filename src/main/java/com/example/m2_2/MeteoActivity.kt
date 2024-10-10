@@ -54,18 +54,15 @@ import com.example.m2_2.Data.getWeatherIcon
 import com.example.m2_2.Data.meteoAJour
 import com.example.m2_2.Data.prochaineSemaine
 import com.example.m2_2.ui.CityState
+import com.example.m2_2.ui.CityViewModel
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 
 @Composable
-fun SecondScreen(navController: NavController,cityState: CityState, cityId: Int) {
+fun SecondScreen(navController: NavController,cityState: CityState, cityId: Int,cityViewModel: CityViewModel) {
     val city = cityState.cities.find { it.id == cityId }
     Column {
-
         topAppBarWithReturn(navController)
-
-        Body(city,cityState)
-
+        Body(city,cityState,cityViewModel)
     }
 
 
@@ -118,8 +115,10 @@ fun MeteoBody(meteo: Meteo) {
 @Composable
 fun ErrorBody() {
     Text(
-        text = "Erreur lors du chargement des données",
-        style = MaterialTheme.typography.bodyLarge
+        text = "Pas de données disponible, Connectez vous à internet",
+        style = MaterialTheme.typography.headlineLarge,
+        textAlign = TextAlign.Center,
+        fontSize = 28.sp,
     )
 }
 
@@ -138,7 +137,7 @@ fun topAppBarWithReturn(navController: NavController){
 }
 
 @Composable
-fun Body(city: City?, cityState: CityState) {
+fun Body(city: City?, cityState: CityState,cityViewModel: CityViewModel) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val meteoDataSource = MeteoRemoteDataSource(LocalContext.current)
@@ -174,6 +173,7 @@ fun Body(city: City?, cityState: CityState) {
 
     // Afficher la météo si elle est disponible, sinon afficher une erreur
     if (meteo.value != null) {
+        cityViewModel.addMeteoToMeteos(context, meteo.value)
         MeteoBody(meteo.value!!)
     } else {
         ErrorBody()
@@ -197,6 +197,7 @@ fun CurrentWeather(meteo: Meteo) {
             color = Color.White
         )
         if(meteo.ville.id != 0){
+
 
             Text(
                 text = "${meteo.ville.country}, ${meteo.ville.admin1}",
