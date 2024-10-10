@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Card
@@ -26,21 +28,31 @@ import androidx.compose.material3.TopAppBar
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.m2_2.Data.City
+import com.example.m2_2.Data.CityRemoteDataSource
 import com.example.m2_2.Data.Meteo
 import com.example.m2_2.Data.MeteoRemoteDataSource
 import com.example.m2_2.Data.getWeatherIcon
+import com.example.m2_2.Data.meteoAJour
+import com.example.m2_2.Data.prochaineSemaine
 import com.example.m2_2.ui.CityState
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -52,35 +64,52 @@ fun SecondScreen(navController: NavController,cityState: CityState, cityId: Int)
 
         topAppBarWithReturn(navController)
 
-        Body(city)
+        Body(city,cityState)
 
     }
 
 
 
 }
-
-@Composable
-fun MeteoBody(meteo: Meteo) {
-    val backgroundColor = when (meteo.weatherCode) {
+fun BackgroundColor(weatherCode: Int): Color {
+    return when (weatherCode) {
         0 -> Color(0xFF87CEEB) // Ciel dégagé
         1 -> Color(0xFFB0E0E6) // Partiellement nuageux
         2 -> Color(0xFF778899) // Nuage
-        3 -> Color(0xFF4682B4) // Nuage avec pluie
-        61, 63 -> Color(0xFF1E90FF) // Averse
-        80 -> Color(0xFFFFA07A) // Orage avec pluie
-        95, 96, 99 -> Color(0xFFFF4500) // Orage
+        3 -> Color(0xFF6B98BD) // Nuage avec pluie
+        61, 63 -> Color(0xFF57A8F6) // Averse
+        80 -> Color(0xFFFAA584) // Orage avec pluie
+        95, 96, 99 -> Color(0xFFF68359) // Orage
         else -> Color.White // Défaut
     }
+}
+fun BackgroundWidget(weatherCode: Int): Color {
+    return when (weatherCode) {
+        0 -> Color(0xFF44B6E5) // Ciel dégagé
+        1 -> Color(0xFF66D5E3) // Partiellement nuageux
+        2 -> Color(0xFF52789E) // Nuage
+        3 -> Color(0xFF2B77B6) // Nuage avec pluie
+        61, 63 -> Color(0xFF2393FA) // Averse
+        80 -> Color(0xFFF87D4C) // Orage avec pluie
+        95, 96, 99 -> Color(0xFFF65A29) // Orage
+        else -> Color.White // Défaut
+    }
+}
+
+
+
+@Composable
+fun MeteoBody(meteo: Meteo) {
 
     Box(modifier = Modifier
         .fillMaxSize()
-        .background(backgroundColor)
+        .background(BackgroundColor(meteo.weatherCode))
         .padding(16.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CurrentWeather(meteo)
             Spacer(modifier = Modifier.height(20.dp))
             AdditionalDetails(meteo)
+            LigneSemaine(meteo)
         }
     }
 }
@@ -109,28 +138,48 @@ fun topAppBarWithReturn(navController: NavController){
 }
 
 @Composable
-fun Body(city: City?) {
+fun Body(city: City?, cityState: CityState) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val meteoDataSource = MeteoRemoteDataSource()
+    val meteoDataSource = MeteoRemoteDataSource(LocalContext.current)
+    val cityDataSource = CityRemoteDataSource()
 
-
-
+    var cityUpdate by remember { mutableStateOf(city) }
     val meteo = remember { mutableStateOf<Meteo?>(null) }
 
     LaunchedEffect(city) {
         if (city != null) {
-            coroutineScope.launch {
-                meteo.value = meteoDataSource.fetchMeteo(city)
+
+            if (city.id == 0) {
+                cityUpdate = cityDataSource.fetchPositionActuelle(context)
             }
+
+            coroutineScope.launch {
+                if (cityState.horsConnexion || meteoAJour(city, cityState.meteos)) {
+                    meteo.value = cityState.meteos.find { it.ville.id == city.id }
+                } else{
+                    // Si cityUpdate est non null (après fetchPositionActuelle ou city déjà fourni), récupère la météo
+                    cityUpdate?.let { updatedCity ->
+                        coroutineScope.launch {
+                            meteo.value = meteoDataSource.fetchMeteo(updatedCity)
+                        }
+                    }
+                }
+
+
+            }
+
         }
     }
 
+    // Afficher la météo si elle est disponible, sinon afficher une erreur
     if (meteo.value != null) {
         MeteoBody(meteo.value!!)
     } else {
         ErrorBody()
     }
 }
+
 
 
 
@@ -147,20 +196,23 @@ fun CurrentWeather(meteo: Meteo) {
             fontSize = 28.sp,
             color = Color.White
         )
-        Text(
-            text = "${meteo.ville.country}, ${meteo.ville.admin1}",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            fontSize = 16.sp,
-            color = Color.White
-        )
+        if(meteo.ville.id != 0){
+
+            Text(
+                text = "${meteo.ville.country}, ${meteo.ville.admin1}",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                fontSize = 16.sp,
+                color = Color.White
+            )
+        }
         Text(
             text = "${meteo.TemperatureActuelle}°C",
             style = MaterialTheme.typography.titleLarge,
             color = Color.White
         )
         Text(
-            text = "Temp. Min: ${meteo.TemperatureMin}°C  |  Temp. Max: ${meteo.TemperatureMax}°C",
+            text = "Temp. Min: ${meteo.TemperatureMinParJOur[0]}°C  |  Temp. Max: ${meteo.TemperatureMaxParJOur[0]}°C",
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White
         )
@@ -180,7 +232,7 @@ fun WeatherIcon(weatherCode: Int, modifier: Modifier) {
 // Composable pour afficher les détails supplémentaires de la météo
 @Composable
 fun AdditionalDetails(meteo: Meteo) {
-    Column(
+        Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -195,9 +247,49 @@ fun AdditionalDetails(meteo: Meteo) {
             color = Color.White
         )
         Text(
-            text = "Heure: ${meteo.HeureActuelle}",
+            text = "Dernière actualisation : ${meteo.HeureActuelle}h",
             style = MaterialTheme.typography.bodySmall,
             color = Color.White
         )
     }
+        }
+
+@Composable
+fun LigneSemaine(meteo: Meteo) {
+    val joursDeLaSemaine = prochaineSemaine()
+    Spacer(modifier = Modifier.height(16.dp))
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+
+            .background(BackgroundColor(meteo.weatherCode)),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().background(BackgroundWidget(meteo.weatherCode))
+        ) {
+            items(7) { i ->
+                Column(
+                    modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = joursDeLaSemaine[i],
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${meteo.TemperatureMaxParJOur[i]}°C",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+    }
 }
+
+

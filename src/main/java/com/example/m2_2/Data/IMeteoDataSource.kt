@@ -1,11 +1,17 @@
 package com.example.m2_2.Data
 
+import android.content.Context
+import android.net.ConnectivityManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 // Modèle de données pour les conditions météorologiques actuelles
 data class CurrentWeather(
@@ -56,29 +62,53 @@ interface IMeteoDataSource {
     suspend fun fetchMeteo(city: City): Meteo
 }
 
-// Classe pour la source de données distante
-class MeteoRemoteDataSource : IMeteoDataSource {
+class MeteoRemoteDataSource(private val context: Context) : IMeteoDataSource {
+
+    // Configuration de l'OkHttpClient avec des timeouts
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS) // Timeout de connexion
+        .readTimeout(30, TimeUnit.SECONDS)    // Timeout de lecture
+        .writeTimeout(15, TimeUnit.SECONDS)   // Timeout d'écriture
+        .build()
+
+    private val retrofit = Retrofit.Builder()
+        .baseUrl("https://api.open-meteo.com/")
+        .client(client) // Ajout du client configuré
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    private val api = retrofit.create(MeteoApiService::class.java)
+
     override suspend fun fetchMeteo(city: City): Meteo {
         return withContext(Dispatchers.IO) {
-            // Appel de l'API via Retrofit
-            val response = RetrofitInstance.api.getMeteo(city.latitude, city.longitude)
+            try {
+                val response = api.getMeteo(city.latitude, city.longitude)
 
-            // Transformez la réponse en un objet Meteo
-            val currentWeather = response.current_weather
-            val dailyMaxTemp = response.daily.temperature_2m_max[0]
-            val dailyMinTemp = response.daily.temperature_2m_min[0]
+                // Transformez la réponse en un objet Meteo
+                val currentWeather = response.current_weather
 
-            // Créez un objet Meteo à retourner
-            Meteo(
-                ville = city,
-                TemperatureActuelle = currentWeather.temperature,
-                TemperatureMin = dailyMinTemp,
-                TemperatureMax = dailyMaxTemp,
-                HeureActuelle = currentWeather.time,
-                Humidite = 0.0, // Remplacez par la valeur correcte si disponible
-                VitesseVent = currentWeather.windspeed,
-                weatherCode = response.daily.weathercode[0]
-            )
+                val heureActuelle = conversionHeure(currentWeather.time)
+
+                Meteo(
+                    ville = city,
+                    TemperatureActuelle = currentWeather.temperature,
+                    HeureActuelle = heureActuelle,
+                    Humidite = 0.0, // Remplacez par la valeur correcte si disponible
+                    VitesseVent = currentWeather.windspeed,
+                    weatherCode = response.daily.weathercode[0],
+                    TemperatureMaxParJOur = response.daily.temperature_2m_max,
+                    TemperatureMinParJOur = response.daily.temperature_2m_min
+                )
+            } catch (e: HttpException) {
+                // Gérer les erreurs HTTP (par exemple, 404, 500)
+                throw Exception("Erreur de réseau: ${e.code()}: ${e.message()}")
+            } catch (e: IOException) {
+                // Gérer les erreurs de connexion (problèmes de réseau)
+                throw Exception("Erreur de connexion: ${e.message}")
+            } catch (e: Exception) {
+                // Gérer les autres exceptions
+                throw Exception("Erreur inconnue: ${e.message}")
+            }
         }
     }
 }

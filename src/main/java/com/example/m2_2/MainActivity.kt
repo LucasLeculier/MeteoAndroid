@@ -29,7 +29,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.sharp.Info
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
@@ -45,6 +47,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,33 +59,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.m2_2.Data.AddCityToFavorites
 import com.example.m2_2.Data.City
 import com.example.m2_2.Data.CityCache
 import com.example.m2_2.Data.CityRemoteDataSource
+import com.example.m2_2.Data.ConnectionStateReceiver
 import com.example.m2_2.Data.ICityDataSource
 import com.example.m2_2.Data.IMeteoDataSource
 import com.example.m2_2.Data.Meteo
+import com.example.m2_2.Data.MeteoCache
 import com.example.m2_2.Data.MeteoRemoteDataSource
-import com.example.m2_2.Data.RemoveCityFromFavorites
 import com.example.m2_2.Data.getWeatherIcon
+import com.example.m2_2.Data.meteoAJour
 import com.example.m2_2.ui.CityState
 import com.example.m2_2.ui.CityViewModel
 import com.example.m2_2.ui.theme.M22Theme
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.shouldShowRationale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -92,14 +103,26 @@ import java.util.Objects
 class MainActivity : ComponentActivity() {
     //private var favoriteCities by mutableStateOf<List<City>>(emptyList())
     private val cityViewModel: CityViewModel by viewModels()
+    private var connectionReceiver: ConnectionStateReceiver? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         cityViewModel.loadCache(this)
         setContent {
+            cityViewModel.setHorsConnexion(!ConnectionStateReceiver.isConnectedToInternet(this))
+            connectionReceiver = ConnectionStateReceiver.register(this) { isConnected ->
+                cityViewModel.setHorsConnexion(!isConnected)
+            }
+
             val cityState by cityViewModel.CityState.collectAsStateWithLifecycle()
             M22Theme {
+
+                Column {
+                    if (cityState.horsConnexion) {
+                        BanniereHorsConnexion()
+                    }
+
                 val navController = rememberNavController()
                 NavHost(navController = navController, startDestination = "home") {
                     composable("home") { HomeScreen(navController, cityState) }
@@ -111,23 +134,24 @@ class MainActivity : ComponentActivity() {
                         SecondScreen(navController = navController,cityState, cityId = cityId) // Passez cityId à SecondScreen
                     }
                 }
-
+                }
             }
         }
     }
 
 
     @Composable
-    fun HomeScreen(navController: NavController, cityState : CityState) {
+    fun HomeScreen(navController: NavController, cityState: CityState) {
+        val context = LocalContext.current
         Column {
             TopBarWithSearch(cityState.searchText) { query ->
-                var searchText = query
-                if (query.length >= 1) { // Lancer la recherche après 3 caractères
-                    cityViewModel.performSearch(query)
+                if (query.length >= 1) { // Lancer la recherche après 1 caractère
+                    cityViewModel.performSearch(query, context)
                 } else {
-                    cityViewModel.clearList()
+                    cityViewModel.clearList() // Réinitialiser la liste des résultats
                 }
             }
+            PositionActuelle(navController)
 
             if (cityState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.padding(16.dp))
@@ -136,21 +160,94 @@ class MainActivity : ComponentActivity() {
                     ResultatsRecherche(cityState.searchResults)
                 } else {
                     // Afficher la liste des favoris si pas de résultats
-                    ListingFavoris(navController,cityState.cities,cityViewModel)
+                    ListingFavoris(cityState,navController, cityState.cities, cityViewModel)
                 }
             }
-            PositionActuelle()
         }
-
     }
 
     @Composable
-    fun PositionActuelle() {
-        Text(
-            text = "Position Actuelle",
-            style = MaterialTheme.typography.bodyLarge
-        )
+    fun BanniereHorsConnexion() {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFFF5722)) // Couleur vive (orange vif)
+                .padding(8.dp) // Espacement autour du texte
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = Color.White, // Couleur blanche pour l'icône
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp)) // Espace entre l'icône et le texte
+                Text(
+                    text = "Mode hors connexion",
+                    color = Color.White, // Texte en blanc pour le contraste
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold // Texte en gras pour plus de visibilité
+                )
+            }
         }
+    }
+
+
+    @OptIn(ExperimentalPermissionsApi::class)
+    @Composable
+    fun PositionActuelle(navController: NavController) {
+        // Utilisation de rememberMultiplePermissionsState pour gérer les permissions
+        val permissionState = rememberPermissionState(permission = android.Manifest.permission.ACCESS_FINE_LOCATION)
+
+        HorizontalDivider()
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    // Si l'utilisateur a la permission de localisation, naviguez
+                    when {
+                        permissionState.status.isGranted -> {
+                            navController.navigate("second_screen/0")
+                        }
+
+                        permissionState.status.shouldShowRationale -> {
+
+                            permissionState.launchPermissionRequest()
+                        }
+
+                        else -> {
+                            // Demande la permission si elle n'est pas encore accordée
+                            permissionState.launchPermissionRequest()
+                        }
+                    }
+                }
+                .padding(16.dp)
+        ) {
+            // Texte centré pour la position actuelle
+            Text(
+                text = "Météo de ma Position actuelle",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Icône de localisation
+            Icon(
+                imageVector = Icons.Filled.LocationOn,
+                contentDescription = "LocationOn Icon"
+            )
+        }
+
+        // Ajoutez un séparateur horizontal
+        HorizontalDivider()
+    }
+
+
 
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -199,11 +296,13 @@ class MainActivity : ComponentActivity() {
                         .fillMaxWidth()
                         .clickable(
                             onClick = {
-                                // Masquer le clavier
-                                val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                                imm.hideSoftInputFromWindow((context as Activity).currentFocus?.windowToken, 0)
-
                                 cityViewModel.addCityToFavorites(this@MainActivity, city)
+                                val imm =
+                                    context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                imm.hideSoftInputFromWindow(
+                                    (context as Activity).currentFocus?.windowToken,
+                                    0
+                                )
                             }
                         )
                         .padding(8.dp)
@@ -277,23 +376,35 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun VilleFavoris(
+        cityViewModel: CityViewModel,
+        cityState : CityState,
         navController: NavController,
         city: City,
-        onCityClick: () -> Unit, // Callback pour la navigation vers la page de la ville
         onDeleteClick: () -> Unit, // Callback pour supprimer la ligne
-        meteoDataSource: IMeteoDataSource = MeteoRemoteDataSource()
+        meteoDataSource: IMeteoDataSource = MeteoRemoteDataSource(LocalContext.current)
     ) {
         val cityId = city.id
+        if(cityId == 0) return /// On affiche pas la position actuelle comme favoris, elle porte l'id 0
         var meteo by remember { mutableStateOf<Meteo?>(null) }
         val coroutineScope = rememberCoroutineScope()
+        val context = LocalContext.current
 
         LaunchedEffect(city) {
             coroutineScope.launch {
-                meteo = meteoDataSource.fetchMeteo(city)
+
+
+                if (cityState.horsConnexion || meteoAJour(city, cityState.meteos)) {
+                    meteo = cityState.meteos.find { it.ville.id == cityId }
+                }else{
+                    meteo = meteoDataSource.fetchMeteo(city)
+                }
+
+
             }
         }
 
         if (meteo != null) {
+            cityViewModel.addMeteoToMeteos(context, meteo)
             Row(
                 modifier = Modifier
 
@@ -348,7 +459,7 @@ class MainActivity : ComponentActivity() {
 
 
     @Composable
-    fun ListingFavoris(navController: NavController,cityList: List<City>, cityViewModel: CityViewModel) {
+    fun ListingFavoris(cityState : CityState,navController: NavController,cityList: List<City>, cityViewModel: CityViewModel) {
         val context = LocalContext.current
 
 
@@ -366,9 +477,10 @@ class MainActivity : ComponentActivity() {
             for (city in cityList) {
                 Column {
                     VilleFavoris(
+                        cityViewModel,
+                        cityState,
                         navController,
                         city,
-                        onCityClick = { /* Handle city click */ },
                         onDeleteClick = { cityViewModel.removeCityFromFavorites(context,city) }
                     )
                 }

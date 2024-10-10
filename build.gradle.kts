@@ -85,4 +85,10 @@ dependencies {
     implementation ("androidx.activity:activity-compose:1.8.0")
     implementation ("androidx.navigation:navigation-compose:2.7.4")
     implementation ("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation ("com.google.accompanist:accompanist-permissions:0.32.0")
+    implementation ("androidx.datastore:datastore-preferences:1.0.0")
+    implementation ("androidx.compose.foundation:foundation:1.5.0")
+
+
+
 }
