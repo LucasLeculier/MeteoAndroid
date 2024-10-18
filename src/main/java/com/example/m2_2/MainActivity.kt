@@ -398,7 +398,7 @@ class MainActivity : ComponentActivity() {
         cityState : CityState,
         navController: NavController,
         city: City,
-        onDeleteClick: () -> Unit, // Callback pour supprimer la ligne
+        onDeleteClick: () -> Unit,
         meteoDataSource: IMeteoDataSource = MeteoRemoteDataSource(LocalContext.current)
     ) {
         val cityId = city.id
@@ -457,7 +457,7 @@ class MainActivity : ComponentActivity() {
                     contentDescription = "Delete Icon",
                     modifier = Modifier
                         .clickable(onClick = {
-                            onDeleteClick() // Appeler le callback pour supprimer la ligne
+                            onDeleteClick()
                         })
                 )
             }

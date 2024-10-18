@@ -165,6 +165,11 @@ class CityViewModel : ViewModel() {
 
                 // Émettre l'état après la suppression
                 _CityState.emit(CityState.value.copy(cities = updatedFavorites))
+
+
+                // Supprimer la météo correspondante
+                val updatedMeteo = _CityState.value.meteos.filter { it.ville.id != city.id }
+                MeteoCache.saveWeatherData(context, updatedMeteo)
             }
         }
     }
